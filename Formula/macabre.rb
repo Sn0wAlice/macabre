@@ -1,7 +1,7 @@
 class Macabre < Formula
   desc "macOS hardening & security audit scanner"
   homepage "https://github.com/Sn0wAlice/macabre"
-  version "0.1.0"
+  version "0.1.1"
   license "MIT"
 
   depends_on :macos
@@ -9,10 +9,10 @@ class Macabre < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/Sn0wAlice/macabre/releases/download/v#{version}/macabre-darwin-arm64.tar.gz"
-      sha256 "9cfa6c7988024c13af5c7faf20a2bad2e9e10f95b563b4badb5561606c68d39d"
+      sha256 "7dfa5bfd48d51c81c0610c0354885d766158c510eceb3139cad703a2f87b1015"
     else
       url "https://github.com/Sn0wAlice/macabre/releases/download/v#{version}/macabre-darwin-amd64.tar.gz"
-      sha256 "13a7f0420c1bc9559534b0f594983d0d057248df0c272d0b42309a9077cde7c8"
+      sha256 "fc8e687ab55f8a4b8ff91e56608575dc4b20c7478cc4aecebb68f9d3732e5b4d"
     end
   end
 
