@@ -27,7 +27,8 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[command(
     name = "macabre",
     version = VERSION,
-    about = "macOS hardening & security audit scanner (read-only)"
+    about = "macOS hardening & security audit scanner (read-only)",
+    disable_help_subcommand = true
 )]
 struct Cli {
     /// Output format. Defaults to a colored terminal report.
@@ -77,6 +78,8 @@ enum Command {
     },
     /// Live full-screen dashboard (re-runs the scan interactively).
     Tui,
+    /// Show a full overview of commands, options, profiles, and examples.
+    Help,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
@@ -105,6 +108,10 @@ fn main() -> ExitCode {
                     ExitCode::FAILURE
                 }
             };
+        }
+        Some(Command::Help) => {
+            print_help();
+            return ExitCode::SUCCESS;
         }
         None => {}
     }
@@ -172,6 +179,72 @@ fn main() -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+/// Rich, colored overview of everything macabre can do.
+fn print_help() {
+    use owo_colors::OwoColorize;
+
+    let n = checks::registry().len();
+    let cats = model::Category::all().len();
+
+    println!("{}", "═".repeat(64).bright_black());
+    println!(
+        "  {} {}  ·  {}",
+        "macabre".bold().bright_magenta(),
+        format!("v{VERSION}").bright_black(),
+        "macOS hardening & security audit scanner".bright_black()
+    );
+    println!(
+        "  {}",
+        format!("{n} check groups across {cats} categories · read-only, never changes anything")
+            .bright_black()
+    );
+    println!("{}", "═".repeat(64).bright_black());
+
+    let head = |t: &str| println!("\n{}", t.bold().underline());
+    let item = |k: &str, d: &str| println!("  {:<24} {}", k.cyan(), d);
+
+    head("USAGE");
+    println!("  {}", "macabre [OPTIONS] [COMMAND]".bright_yellow());
+
+    head("COMMANDS");
+    item("(default)", "Run the audit and print a colored terminal report");
+    item("tui", "Live full-screen dashboard (auto-refreshing)");
+    item("diff <old> <new>", "Compare two saved JSON reports over time");
+    item("help", "Show this overview");
+
+    head("SCAN OPTIONS");
+    item("-p, --paranoia", "Deep scan: + privacy/anti-telemetry + inventory");
+    item("-f, --format <FMT>", "term (default), json, md, html");
+    item("-o, --output <PATH>", "Write the report to a file");
+    item("-v, --verbose", "Show rationale, remediation, and references");
+    item("    --only <CATS>", "Only run these categories/ids (comma-separated)");
+    item("    --skip <CATS>", "Skip these categories/ids (comma-separated)");
+    item("    --list", "List every registered check and exit");
+    item("    --strict", "Exit non-zero if any *security* check FAILs (CI)");
+    item("    --help / --version", "Standard clap help / version");
+
+    head("PROFILES");
+    item("baseline", "Security posture (default)");
+    item("paranoia", "Baseline + privacy/anti-telemetry + deep inventory");
+
+    head("SCORING");
+    println!("  Two indices, severity-weighted: {} (always) and {} (paranoia).",
+        "Security".green(), "Privacy".magenta());
+
+    head("EXAMPLES");
+    let ex = |c: &str, d: &str| println!("  {:<34} {}", c.bright_yellow(), format!("# {d}").bright_black());
+    ex("macabre", "baseline terminal report");
+    ex("sudo macabre --paranoia -v", "full deep scan, verbose, as root");
+    ex("macabre --only firewall,privacy", "just these categories");
+    ex("macabre -f json -o today.json", "save a snapshot");
+    ex("macabre diff old.json today.json", "see what changed");
+    ex("macabre tui --paranoia", "live dashboard");
+    ex("macabre --list", "see all checks");
+
+    println!("\n  {} {}", "repo:".bright_black(), "https://github.com/Sn0wAlice/macabre".blue());
+    println!("{}", "═".repeat(64).bright_black());
 }
 
 /// Print the registry grouped by category, then exit.

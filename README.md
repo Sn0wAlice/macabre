@@ -6,7 +6,7 @@ A read-only **macOS hardening & security audit scanner**, written in Rust.
 
 `macabre` inspects local security settings, scores the host with a weighted
 *hardening index*, and reports findings to a colored terminal view (lynis-style)
-or exports them as JSON / Markdown / HTML. It **only reads** system state — it
+or exports them as JSON / Markdown / HTML. It **only reads** system state - it
 never changes anything. Failing checks include the exact command you'd run to
 fix them.
 
@@ -63,13 +63,13 @@ Save JSON snapshots (`macabre -f json -o report.json`) and compare them:
 macabre diff yesterday.json today.json
 ```
 
-It reports the score deltas and per-finding transitions — `REGRESSED`,
-`IMPROVED`, `NEW`, `REMOVED` (matched by stable check id) — and exits non-zero
+It reports the score deltas and per-finding transitions - `REGRESSED`,
+`IMPROVED`, `NEW`, `REMOVED` (matched by stable check id) - and exits non-zero
 if anything regressed, so it can gate CI.
 
 ## Profiles
 
-- **baseline** (default): security posture — integrity, encryption, firewall,
+- **baseline** (default): security posture - integrity, encryption, firewall,
   app security, accounts, sharing, updates.
 - **paranoia** (`--paranoia`): everything in baseline **plus** privacy /
   anti-telemetry checks and a deep inventory (external listeners, third-party
@@ -96,8 +96,8 @@ Two independent indices, each `earned / possible × 100` weighted by severity
 (`PASS` = full, `WARN` = half, `FAIL`/`SKIP`/`INFO` = none of the earned credit;
 `SKIP`/`INFO` aren't counted in *possible* either):
 
-- **Security index** — always shown. Real exposure.
-- **Privacy index** — shown in `--paranoia`. Anti-telemetry tradeoffs are scored
+- **Security index** - always shown. Real exposure.
+- **Privacy index** - shown in `--paranoia`. Anti-telemetry tradeoffs are scored
   here so a normal Mac isn't penalised on *security* for keeping Spotlight on.
 
 All remediations are **shown, never executed**; opinionated ones (e.g. disabling
@@ -105,11 +105,11 @@ Spotlight) carry an explicit tradeoff note.
 
 ## Architecture
 
-- `src/checks/` — one module per category; each returns `Finding`s. Add a check
+- `src/checks/` - one module per category; each returns `Finding`s. Add a check
   by writing a function and registering it in the module's `run()`.
-- `src/report/` — decoupled renderers (terminal, json, markdown, html).
-- `src/sys.rs` — read-only command wrappers.
-- `src/model.rs` — `Finding`, `Status`, `Severity`, `Category`, `Score`.
+- `src/report/` - decoupled renderers (terminal, json, markdown, html).
+- `src/sys.rs` - read-only command wrappers.
+- `src/model.rs` - `Finding`, `Status`, `Severity`, `Category`, `Score`.
 
 ## Roadmap
 
