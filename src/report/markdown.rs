@@ -11,13 +11,23 @@ pub fn render(report: &Report) -> String {
     let _ = writeln!(s, "- **Generated:** {}", report.generated_at);
     let _ = writeln!(s, "- **Tool:** {} v{}\n", report.tool, report.version);
 
-    let sc = &report.score;
-    let _ = writeln!(s, "## Hardening index: {}/100\n", sc.index);
+    let _ = writeln!(s, "- **Profile:** {:?}\n", report.profile);
+
+    let sec = &report.security;
+    let _ = writeln!(s, "## Security index: {}/100\n", sec.index);
     let _ = writeln!(
         s,
         "| Pass | Warn | Fail | Skip | Info |\n|---|---|---|---|---|\n| {} | {} | {} | {} | {} |\n",
-        sc.passed, sc.warned, sc.failed, sc.skipped, sc.info
+        sec.passed, sec.warned, sec.failed, sec.skipped, sec.info
     );
+    if let Some(p) = &report.privacy {
+        let _ = writeln!(s, "## Privacy index: {}/100\n", p.index);
+        let _ = writeln!(
+            s,
+            "| Pass | Warn | Fail | Skip | Info |\n|---|---|---|---|---|\n| {} | {} | {} | {} | {} |\n",
+            p.passed, p.warned, p.failed, p.skipped, p.info
+        );
+    }
 
     for cat in Category::all() {
         let items: Vec<_> = report.findings.iter().filter(|f| f.category == *cat).collect();

@@ -4,6 +4,10 @@
 //! a weighted "hardening index", and reports findings to the terminal or to
 //! JSON / Markdown / HTML. It only inspects state — it never changes anything;
 //! failing checks include the command you'd run to fix them.
+//!
+//! `--paranoia` adds a deep scan: anti-telemetry/privacy checks (scored in a
+//! separate Privacy index) plus deep inventory (external listeners, third-party
+//! launchd jobs, configuration profiles).
 
 mod checks;
 mod model;
@@ -11,7 +15,7 @@ mod report;
 mod sys;
 
 use clap::{Parser, ValueEnum};
-use model::{Report, Score};
+use model::{Class, Profile, Report, Score, Status};
 use report::Format;
 use std::process::ExitCode;
 
@@ -36,7 +40,23 @@ struct Cli {
     #[arg(short, long)]
     verbose: bool,
 
-    /// Exit non-zero if any check fails (useful in CI / monitoring).
+    /// Deep scan: add privacy/anti-telemetry checks and deep inventory.
+    #[arg(short, long)]
+    paranoia: bool,
+
+    /// Only run these categories or check ids (comma-separated).
+    #[arg(long, value_name = "CATS", value_delimiter = ',')]
+    only: Vec<String>,
+
+    /// Skip these categories or check ids (comma-separated).
+    #[arg(long, value_name = "CATS", value_delimiter = ',')]
+    skip: Vec<String>,
+
+    /// List all registered checks (id, category, profile) and exit.
+    #[arg(long)]
+    list: bool,
+
+    /// Exit non-zero if any security check fails (useful in CI / monitoring).
     #[arg(long)]
     strict: bool,
 }
@@ -54,9 +74,25 @@ enum OutFormat {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    let findings = checks::run_all();
-    let score = Score::compute(&findings);
-    let failed = score.failed;
+    if cli.list {
+        list_checks();
+        return ExitCode::SUCCESS;
+    }
+
+    let profile = if cli.paranoia { Profile::Paranoia } else { Profile::Baseline };
+    let findings = checks::run(profile, &cli.only, &cli.skip);
+
+    let security = Score::compute_for(&findings, Class::Security);
+    let privacy = if findings.iter().any(|f| f.category.class() == Class::Privacy) {
+        Some(Score::compute_for(&findings, Class::Privacy))
+    } else {
+        None
+    };
+    // Strict mode only cares about real security failures.
+    let security_fails = findings
+        .iter()
+        .filter(|f| f.category.class() == Class::Security && f.status == Status::Fail)
+        .count();
 
     let report = Report {
         tool: "macabre",
@@ -64,7 +100,10 @@ fn main() -> ExitCode {
         generated_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S %z").to_string(),
         hostname: sys::hostname(),
         os_version: sys::os_version(),
-        score,
+        profile,
+        root: sys::is_root(),
+        security,
+        privacy,
         findings,
     };
 
@@ -94,10 +133,32 @@ fn main() -> ExitCode {
         }
     }
 
-    if cli.strict && failed > 0 {
+    if cli.strict && security_fails > 0 {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
+    }
+}
+
+/// Print the registry grouped by category, then exit.
+fn list_checks() {
+    let mut groups = checks::registry();
+    groups.sort_by_key(|g| (g.category as u8, g.id));
+    println!("macabre v{VERSION} — registered checks\n");
+    for cat in model::Category::all() {
+        let in_cat: Vec<_> = groups.iter().filter(|g| g.category == *cat).collect();
+        if in_cat.is_empty() {
+            continue;
+        }
+        println!("{} [{}]", cat.title(), cat.slug());
+        for g in in_cat {
+            let prof = match g.profile {
+                Profile::Baseline => "baseline",
+                Profile::Paranoia => "paranoia",
+            };
+            println!("  {:<28} {}", g.id, prof);
+        }
+        println!();
     }
 }
 

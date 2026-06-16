@@ -40,6 +40,37 @@ pub fn defaults_read(domain: &str, key: &str) -> Option<String> {
     run("defaults", &["read", domain, key])
 }
 
+/// Read a `defaults` value from an app by bundle/app name (`defaults read -app`).
+pub fn defaults_read_app(app: &str, key: &str) -> Option<String> {
+    run("defaults", &["read", "-app", app, key])
+}
+
+/// Whether the current process is running as root (euid 0).
+///
+/// Cached: the euid can't change during a run, and several checks consult it.
+pub fn is_root() -> bool {
+    use std::sync::OnceLock;
+    static ROOT: OnceLock<bool> = OnceLock::new();
+    *ROOT.get_or_init(|| run("id", &["-u"]).as_deref() == Some("0"))
+}
+
+/// Whether a process whose command line contains `needle` is running.
+pub fn process_running(needle: &str) -> bool {
+    run("pgrep", &["-f", needle]).is_some()
+}
+
+/// List `.plist`-ish entries in a directory (file names only). Empty if the
+/// directory is missing or unreadable.
+pub fn list_dir(path: &str) -> Vec<String> {
+    match std::fs::read_dir(path) {
+        Ok(rd) => rd
+            .filter_map(|e| e.ok())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// Current hostname.
 pub fn hostname() -> String {
     run("scutil", &["--get", "ComputerName"])

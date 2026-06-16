@@ -1,7 +1,7 @@
 //! Colored terminal report, inspired by lynis/htop: grouped sections, a colored
 //! status badge per check, and a hardening-index gauge at the end.
 
-use crate::model::{Category, Finding, Report, Status};
+use crate::model::{Category, Finding, Profile, Report, Score, Status};
 use owo_colors::{OwoColorize, Style};
 
 /// Print the full report to stdout. `verbose` adds rationale + remediation lines
@@ -39,6 +39,14 @@ fn header(report: &Report) {
         report.os_version,
         report.generated_at.bright_black()
     );
+    if report.profile == Profile::Paranoia {
+        let root = if report.root { "root" } else { "non-root" };
+        println!(
+            "  {}  {}",
+            " PARANOIA MODE ".bold().black().on_bright_magenta(),
+            format!("deep scan · {root}").bright_black()
+        );
+    }
     println!("{}", line.bright_black());
 }
 
@@ -79,10 +87,34 @@ fn badge(status: Status) -> String {
 }
 
 fn summary(report: &Report) {
-    let sc = &report.score;
     println!("\n{}", "─".repeat(64).bright_black());
+    tally("security", &report.security);
+    println!("  {} {}", "Security index".bold(), gauge(report.security.index));
+
+    if let Some(privacy) = &report.privacy {
+        println!();
+        tally("privacy ", privacy);
+        println!("  {}  {}", "Privacy index ".bold(), gauge(privacy.index));
+    }
+
+    // Nudge to re-run with sudo when checks were skipped for lack of privilege.
+    let skipped = report.security.skipped + report.privacy.as_ref().map_or(0, |p| p.skipped);
+    if skipped > 0 && !report.root {
+        println!(
+            "\n  {} {} skipped — some need root: {}",
+            "↑".yellow(),
+            skipped,
+            "re-run with sudo for full coverage".bright_black()
+        );
+    }
+    println!("{}", "─".repeat(64).bright_black());
+}
+
+/// One line of pass/warn/fail/skip counts, labelled.
+fn tally(label: &str, sc: &Score) {
     println!(
-        "  {}  {}   {}  {}   {}  {}   {}  {}",
+        "  {}   {}  {}   {}  {}   {}  {}   {}  {}",
+        label.bright_black(),
         "pass".green(),
         sc.passed.bold(),
         "warn".yellow(),
@@ -92,8 +124,6 @@ fn summary(report: &Report) {
         "skip".bright_black(),
         sc.skipped.bold(),
     );
-    println!("\n  {} {}", "Hardening index".bold(), gauge(sc.index));
-    println!("{}", "─".repeat(64).bright_black());
 }
 
 /// A 40-cell gauge colored by band: red < 50, yellow < 80, green otherwise.

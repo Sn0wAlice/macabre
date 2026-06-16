@@ -1,12 +1,16 @@
 //! System Integrity Protection and boot security.
 
-use crate::model::{Category, Finding, Severity, Status};
+use super::CheckGroup;
+use crate::model::{Category, Finding, Profile, Severity, Status};
 use crate::sys;
 
 const CAT: Category = Category::SystemIntegrity;
 
-pub fn run() -> Vec<Finding> {
-    vec![sip()]
+pub fn groups() -> Vec<CheckGroup> {
+    vec![
+        CheckGroup { id: "integrity.sip", category: CAT, profile: Profile::Baseline, run: || vec![sip()] },
+        CheckGroup { id: "integrity.sysext", category: CAT, profile: Profile::Paranoia, run: || vec![system_extensions()] },
+    ]
 }
 
 /// System Integrity Protection — protects system files from tampering even by
@@ -48,5 +52,40 @@ fn sip() -> Finding {
             Severity::Critical,
             "csrutil not available or returned no output",
         ),
+    }
+}
+
+/// Inventory of activated system/network extensions. Informational: these are
+/// legitimate (Little Snitch, Tailscale, ...) but worth eyeballing for anything
+/// unexpected, since they run with deep system privileges.
+fn system_extensions() -> Finding {
+    let out = sys::run("systemextensionsctl", &["list"]).unwrap_or_default();
+    let active: Vec<String> = out
+        .lines()
+        .filter(|l| l.contains("activated enabled"))
+        // The human-readable name is the second-to-last column before [state].
+        .filter_map(|l| l.split('\t').map(str::trim).find(|c| c.contains('.')))
+        .map(|s| s.to_string())
+        .collect();
+
+    if active.is_empty() {
+        Finding::new(
+            "integrity.sysext",
+            CAT,
+            "No third-party system extensions active",
+            Status::Info,
+            Severity::Low,
+            "systemextensionsctl reports no activated extensions",
+        )
+    } else {
+        Finding::new(
+            "integrity.sysext",
+            CAT,
+            &format!("{} system extension(s) active", active.len()),
+            Status::Info,
+            Severity::Low,
+            active.join(", "),
+        )
+        .rationale("System extensions run with deep privileges. Confirm each is one you installed intentionally.")
     }
 }

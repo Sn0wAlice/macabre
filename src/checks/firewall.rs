@@ -6,7 +6,8 @@
 //! firewall is off we therefore check whether a third-party firewall is active
 //! before flagging the host as unprotected.
 
-use crate::model::{Category, Finding, Severity, Status};
+use super::CheckGroup;
+use crate::model::{Category, Finding, Profile, Severity, Status};
 use crate::sys;
 
 const CAT: Category = Category::Firewall;
@@ -27,12 +28,23 @@ struct ThirdParty {
     evidence: String,
 }
 
-pub fn run() -> Vec<Finding> {
+pub fn groups() -> Vec<CheckGroup> {
+    vec![
+        // One group: detect built-in + third-party state once, emit several findings.
+        CheckGroup { id: "firewall.state", category: CAT, profile: Profile::Baseline, run: state_findings },
+        CheckGroup { id: "firewall.allowsigned", category: CAT, profile: Profile::Paranoia, run: || vec![allow_signed()] },
+    ]
+}
+
+/// Built-in + third-party detection done once, yielding the enabled, stealth,
+/// and block-all findings.
+fn state_findings() -> Vec<Finding> {
     let builtin = builtin_state();
     let third_party = detect_third_party();
     vec![
         firewall_enabled(builtin, third_party.as_ref()),
         stealth_mode(builtin, third_party.as_ref()),
+        block_all(),
     ]
 }
 
@@ -77,7 +89,7 @@ fn detect_third_party() -> Option<ThirdParty> {
             }
         }
         // Fallback: a matching daemon is running.
-        if sys::run("pgrep", &["-f", proc]).is_some() {
+        if sys::process_running(proc) {
             return Some(ThirdParty {
                 name: name.to_string(),
                 evidence: format!("daemon running: {proc}"),
@@ -189,6 +201,78 @@ fn stealth_mode(builtin: Builtin, third_party: Option<&ThirdParty>) -> Finding {
             "Stealth mode status unknown",
             Status::Skip,
             Severity::Medium,
+            "socketfilterfw not available",
+        ),
+    }
+}
+
+/// "Block all incoming connections" — strictest built-in firewall mode. Off is
+/// the usual default; on is hardened but breaks inbound services. Informational.
+fn block_all() -> Finding {
+    match sys::run_lossy(FW, &["--getblockall"]) {
+        Some(out) if out.to_lowercase().contains("set to enabled") => Finding::new(
+            "firewall.blockall",
+            CAT,
+            "Block all incoming connections enabled",
+            Status::Pass,
+            Severity::Low,
+            out,
+        )
+        .rationale("Block-all mode rejects every inbound connection except those essential to basic services — the strictest inbound posture."),
+        Some(out) => Finding::new(
+            "firewall.blockall",
+            CAT,
+            "Block all incoming connections disabled",
+            Status::Info,
+            Severity::Low,
+            out,
+        )
+        .rationale("Optional hardening: blocks all inbound connections. Off by default; enabling it can break inbound services you rely on."),
+        None => Finding::new(
+            "firewall.blockall",
+            CAT,
+            "Block-all status unknown",
+            Status::Skip,
+            Severity::Low,
+            "socketfilterfw not available",
+        ),
+    }
+}
+
+/// Whether the firewall auto-allows signed software. Convenient, but a stricter
+/// stance requires explicit approval of each listening app.
+fn allow_signed() -> Finding {
+    match sys::run_lossy(FW, &["--getallowsigned"]) {
+        Some(out) => {
+            // Two lines: built-in signed + downloaded signed. "ENABLED" => auto-allow.
+            if out.to_uppercase().contains("ENABLED") {
+                Finding::new(
+                    "firewall.allowsigned",
+                    CAT,
+                    "Firewall auto-allows signed software",
+                    Status::Warn,
+                    Severity::Low,
+                    out.replace('\n', " · "),
+                )
+                .rationale("Auto-allowing signed software means new signed apps can listen without prompting. Paranoid stance: disable and approve each app explicitly.")
+                .remediation("sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setallowsigned off --setallowsignedapp off")
+            } else {
+                Finding::new(
+                    "firewall.allowsigned",
+                    CAT,
+                    "Firewall requires explicit app approval",
+                    Status::Pass,
+                    Severity::Low,
+                    out.replace('\n', " · "),
+                )
+            }
+        }
+        None => Finding::new(
+            "firewall.allowsigned",
+            CAT,
+            "Auto-allow-signed status unknown",
+            Status::Skip,
+            Severity::Low,
             "socketfilterfw not available",
         ),
     }

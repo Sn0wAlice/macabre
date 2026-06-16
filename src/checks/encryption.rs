@@ -1,12 +1,18 @@
 //! Disk encryption (FileVault).
 
-use crate::model::{Category, Finding, Severity, Status};
+use super::CheckGroup;
+use crate::model::{Category, Finding, Profile, Severity, Status};
 use crate::sys;
 
 const CAT: Category = Category::Encryption;
 
-pub fn run() -> Vec<Finding> {
-    vec![filevault()]
+pub fn groups() -> Vec<CheckGroup> {
+    vec![CheckGroup {
+        id: "encryption.filevault",
+        category: CAT,
+        profile: Profile::Baseline,
+        run: || vec![filevault()],
+    }]
 }
 
 /// FileVault full-disk encryption. Without it, anyone with physical access can

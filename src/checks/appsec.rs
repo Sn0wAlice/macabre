@@ -1,12 +1,42 @@
 //! Application security: Gatekeeper code-signing enforcement.
 
-use crate::model::{Category, Finding, Severity, Status};
+use super::CheckGroup;
+use crate::model::{Category, Finding, Profile, Severity, Status};
 use crate::sys;
 
 const CAT: Category = Category::AppSecurity;
 
-pub fn run() -> Vec<Finding> {
-    vec![gatekeeper()]
+pub fn groups() -> Vec<CheckGroup> {
+    vec![
+        CheckGroup { id: "appsec.gatekeeper", category: CAT, profile: Profile::Baseline, run: || vec![gatekeeper()] },
+        CheckGroup { id: "appsec.xprotect", category: CAT, profile: Profile::Baseline, run: || vec![xprotect()] },
+    ]
+}
+
+/// XProtect (built-in malware signature) version — informational, but a very
+/// old version can hint that security data updates aren't flowing.
+fn xprotect() -> Finding {
+    const PLIST: &str =
+        "/Library/Apple/System/Library/CoreServices/XProtect.bundle/Contents/Info.plist";
+    match sys::run("defaults", &["read", PLIST, "CFBundleShortVersionString"]) {
+        Some(ver) => Finding::new(
+            "appsec.xprotect",
+            CAT,
+            &format!("XProtect version {ver}"),
+            Status::Info,
+            Severity::Low,
+            format!("XProtect malware definitions version {ver}"),
+        )
+        .rationale("XProtect ships malware signatures with macOS and updates silently. The version is shown for awareness; ensure ConfigDataInstall (security responses) is enabled."),
+        None => Finding::new(
+            "appsec.xprotect",
+            CAT,
+            "XProtect version unknown",
+            Status::Skip,
+            Severity::Low,
+            "could not read XProtect Info.plist",
+        ),
+    }
 }
 
 /// Gatekeeper enforces that downloaded apps are signed and notarized.

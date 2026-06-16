@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 pub fn render(report: &Report) -> String {
     let mut s = String::new();
-    let sc = &report.score;
+    let sc = &report.security;
     let _ = write!(
         s,
         r#"<!DOCTYPE html>
@@ -66,6 +66,29 @@ a {{ color:#6ea8fe; }}
         failed = sc.failed,
         skipped = sc.skipped,
     );
+
+    if let Some(p) = &report.privacy {
+        let _ = write!(
+            s,
+            r#"<div class="score">
+  <div class="idx">{idx}<span style="font-size:1rem;color:#9aa0aa">/100</span></div>
+  <div style="flex:1">
+    <div style="font-size:.8rem;color:#9aa0aa;margin-bottom:.4rem">Privacy index (anti-telemetry)</div>
+    <div class="bar"><i style="width:{idx}%"></i></div>
+    <div class="tally" style="margin-top:.6rem">
+      <span style="color:#3fae6a">✔ {passed} hardened</span>
+      <span style="color:#e0a93f">▲ {warned} exposed</span>
+      <span style="color:#9aa0aa">⏭ {skipped} n/a</span>
+    </div>
+  </div>
+</div>
+"#,
+            idx = p.index,
+            passed = p.passed,
+            warned = p.warned,
+            skipped = p.skipped,
+        );
+    }
 
     for cat in Category::all() {
         let items: Vec<_> = report.findings.iter().filter(|f| f.category == *cat).collect();

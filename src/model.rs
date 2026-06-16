@@ -62,6 +62,24 @@ impl Severity {
     }
 }
 
+/// Audit depth. `Paranoia` is a superset of `Baseline`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Profile {
+    Baseline,
+    Paranoia,
+}
+
+/// Which score a finding contributes to. Security failures are real exposure;
+/// privacy findings are anti-telemetry tradeoffs scored separately so a normal
+/// Mac isn't penalised on security for keeping Spotlight on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Class {
+    Security,
+    Privacy,
+}
+
 /// Logical grouping of checks, used as section headers in reports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Category {
@@ -69,8 +87,12 @@ pub enum Category {
     Encryption,
     Firewall,
     AppSecurity,
+    Account,
     Sharing,
+    Network,
+    Persistence,
     Updates,
+    Privacy,
 }
 
 impl Category {
@@ -80,8 +102,36 @@ impl Category {
             Category::Encryption => "Disk Encryption",
             Category::Firewall => "Firewall",
             Category::AppSecurity => "Application Security",
+            Category::Account => "Accounts & Authentication",
             Category::Sharing => "Sharing & Remote Access",
+            Category::Network => "Network Exposure",
+            Category::Persistence => "Persistence & Profiles",
             Category::Updates => "Software Updates",
+            Category::Privacy => "Privacy & Telemetry",
+        }
+    }
+
+    /// Slug used for `--only`/`--skip` matching, e.g. "privacy".
+    pub fn slug(&self) -> &'static str {
+        match self {
+            Category::SystemIntegrity => "integrity",
+            Category::Encryption => "encryption",
+            Category::Firewall => "firewall",
+            Category::AppSecurity => "appsec",
+            Category::Account => "account",
+            Category::Sharing => "sharing",
+            Category::Network => "network",
+            Category::Persistence => "persistence",
+            Category::Updates => "updates",
+            Category::Privacy => "privacy",
+        }
+    }
+
+    /// Which score this category feeds.
+    pub fn class(&self) -> Class {
+        match self {
+            Category::Privacy => Class::Privacy,
+            _ => Class::Security,
         }
     }
 
@@ -92,8 +142,12 @@ impl Category {
             Category::Encryption,
             Category::Firewall,
             Category::AppSecurity,
+            Category::Account,
             Category::Sharing,
+            Category::Network,
+            Category::Persistence,
             Category::Updates,
+            Category::Privacy,
         ]
     }
 }
@@ -176,7 +230,8 @@ pub struct Score {
 }
 
 impl Score {
-    pub fn compute(findings: &[Finding]) -> Self {
+    /// Compute a score over only the findings whose category feeds `class`.
+    pub fn compute_for(findings: &[Finding], class: Class) -> Self {
         let mut s = Score {
             passed: 0,
             warned: 0,
@@ -188,6 +243,9 @@ impl Score {
         let mut earned = 0u32;
         let mut possible = 0u32;
         for f in findings {
+            if f.category.class() != class {
+                continue;
+            }
             match f.status {
                 Status::Pass => s.passed += 1,
                 Status::Warn => s.warned += 1,
@@ -223,6 +281,55 @@ pub struct Report {
     pub generated_at: String,
     pub hostname: String,
     pub os_version: String,
-    pub score: Score,
+    pub profile: Profile,
+    /// Whether the scan ran with root privileges (affects how many checks ran).
+    pub root: bool,
+    /// Security hardening index, always present.
+    pub security: Score,
+    /// Privacy/anti-telemetry index — only present when privacy findings ran.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub privacy: Option<Score>,
     pub findings: Vec<Finding>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn f(category: Category, status: Status, severity: Severity) -> Finding {
+        Finding::new("x", category, "t", status, severity, "")
+    }
+
+    #[test]
+    fn score_split_isolates_classes() {
+        let findings = vec![
+            // Security: one critical pass, one high fail.
+            f(Category::Encryption, Status::Pass, Severity::Critical),
+            f(Category::Firewall, Status::Fail, Severity::High),
+            // Privacy: one medium warn (half credit), one low pass.
+            f(Category::Privacy, Status::Warn, Severity::Medium),
+            f(Category::Privacy, Status::Pass, Severity::Low),
+        ];
+        let sec = Score::compute_for(&findings, Class::Security);
+        let priv_ = Score::compute_for(&findings, Class::Privacy);
+
+        // Security: earned 8 (crit pass) of possible 12 (8 + 4) = 67.
+        assert_eq!((sec.passed, sec.failed), (1, 1));
+        assert_eq!(sec.index, 67);
+        // Privacy: earned warn 2/2=1 + pass 1 = 2 of possible 3 = 67.
+        assert_eq!((priv_.passed, priv_.warned), (1, 1));
+        assert_eq!(priv_.index, 67);
+    }
+
+    #[test]
+    fn skip_and_info_are_unscored() {
+        let findings = vec![
+            f(Category::Account, Status::Skip, Severity::Critical),
+            f(Category::Account, Status::Info, Severity::High),
+        ];
+        // Nothing scored => perfect index, but counts still tallied.
+        let sec = Score::compute_for(&findings, Class::Security);
+        assert_eq!(sec.index, 100);
+        assert_eq!((sec.skipped, sec.info), (1, 1));
+    }
 }

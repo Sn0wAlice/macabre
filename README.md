@@ -18,30 +18,54 @@ cargo build --release
 ## Usage
 
 ```sh
-macabre                      # colored terminal report
+macabre                      # colored terminal report (baseline security)
+macabre --paranoia           # deep scan: + privacy/anti-telemetry + inventory
 macabre -v                   # verbose: rationale + remediation + refs
+macabre --list               # list every check (id, category, profile)
+macabre --only privacy,firewall   # run only these categories/ids
+macabre --skip sharing            # run everything except these
 macabre -f json              # machine-readable, for monitoring/diffing
 macabre -f md  -o report.md  # Markdown to a file
 macabre -f html -o report.html
-macabre --strict             # exit non-zero if any check FAILs (CI)
+macabre --strict             # exit non-zero if any *security* check FAILs (CI)
+sudo macabre --paranoia      # some checks need root for full coverage
 ```
 
-## What it checks (v0.1)
+## Profiles
 
-| Category | Checks |
+- **baseline** (default): security posture — integrity, encryption, firewall,
+  app security, accounts, sharing, updates.
+- **paranoia** (`--paranoia`): everything in baseline **plus** privacy /
+  anti-telemetry checks and a deep inventory (external listeners, third-party
+  launchd jobs, configuration profiles).
+
+## What it checks
+
+| Category | Examples |
 |---|---|
-| System Integrity | SIP |
+| System Integrity | SIP, system-extension inventory |
 | Disk Encryption | FileVault |
-| Firewall | Application firewall, stealth mode |
-| Application Security | Gatekeeper |
-| Sharing & Remote Access | SSH, Screen Sharing, ARD, SMB |
-| Software Updates | auto-check, auto-download, security responses, OS updates |
+| Firewall | built-in + third-party (Little Snitch/LuLu/…), stealth, block-all, auto-allow-signed |
+| Application Security | Gatekeeper, XProtect version |
+| Accounts & Authentication | auto-login, guest, root account, admin session, screen lock |
+| Sharing & Remote Access | SSH (+ sshd_config), Screen Sharing, ARD, SMB/AFP, printer, Internet Sharing, Remote Apple Events, Content Caching |
+| Network Exposure | wake-on-LAN, external listening ports |
+| Persistence & Profiles | third-party launchd jobs, MDM/configuration profiles |
+| Software Updates | auto-check/download, security responses, critical & OS updates |
+| Privacy & Telemetry *(paranoia)* | Spotlight indexing, Siri, Apple ads, analytics, AirDrop, Secure Keyboard Entry, Safari suggestions |
 
 ## Scoring
 
-Each scored check is weighted by severity (low → critical). The hardening index
-is `earned / possible × 100`, where a `PASS` earns full weight, a `WARN` earns
-half, and a `FAIL` earns none. `SKIP`/`INFO` findings don't affect the score.
+Two independent indices, each `earned / possible × 100` weighted by severity
+(`PASS` = full, `WARN` = half, `FAIL`/`SKIP`/`INFO` = none of the earned credit;
+`SKIP`/`INFO` aren't counted in *possible* either):
+
+- **Security index** — always shown. Real exposure.
+- **Privacy index** — shown in `--paranoia`. Anti-telemetry tradeoffs are scored
+  here so a normal Mac isn't penalised on *security* for keeping Spotlight on.
+
+All remediations are **shown, never executed**; opinionated ones (e.g. disabling
+Spotlight) carry an explicit tradeoff note.
 
 ## Architecture
 
@@ -53,8 +77,7 @@ half, and a `FAIL` earns none. `SKIP`/`INFO` findings don't affect the score.
 
 ## Roadmap
 
-- [ ] More checks: password policy, screensaver lock, sudo timeout, secure
-      keyboard entry, automatic login, AirDrop, Bluetooth sharing, listening ports
 - [ ] Per-check CIS benchmark references
-- [ ] `--only`/`--skip` category filters
+- [ ] Root-only checks: password policy, sudo timeout (currently SKIP without sudo)
 - [ ] Optional live TUI dashboard
+- [ ] Baseline diffing (compare two JSON reports over time)
