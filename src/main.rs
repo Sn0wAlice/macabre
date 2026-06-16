@@ -14,6 +14,7 @@ mod diff;
 mod model;
 mod report;
 mod sys;
+mod sysinfo;
 mod tui;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -32,7 +33,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 )]
 struct Cli {
     /// Output format. Defaults to a colored terminal report.
-    #[arg(short, long, value_enum, default_value_t = OutFormat::Term)]
+    #[arg(short, long, value_enum, default_value_t = OutFormat::Term, global = true)]
     format: OutFormat,
 
     /// Write the report to a file instead of stdout.
@@ -40,7 +41,7 @@ struct Cli {
     output: Option<String>,
 
     /// Show rationale, remediation, and references for every finding (terminal).
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     verbose: bool,
 
     /// Deep scan: add privacy/anti-telemetry checks and deep inventory.
@@ -78,6 +79,8 @@ enum Command {
     },
     /// Live full-screen dashboard (re-runs the scan interactively).
     Tui,
+    /// Dump hardware & resources (chip, cores, RAM, storage, battery health).
+    Sysinfo,
     /// Show a full overview of commands, options, profiles, and examples.
     Help,
 }
@@ -108,6 +111,9 @@ fn main() -> ExitCode {
                     ExitCode::FAILURE
                 }
             };
+        }
+        Some(Command::Sysinfo) => {
+            return ExitCode::from(sysinfo::run(cli.format == OutFormat::Json) as u8);
         }
         Some(Command::Help) => {
             print_help();
@@ -211,6 +217,7 @@ fn print_help() {
     head("COMMANDS");
     item("(default)", "Run the audit and print a colored terminal report");
     item("tui", "Live full-screen dashboard (auto-refreshing)");
+    item("sysinfo", "Dump hardware & resources (specs, battery health)");
     item("diff <old> <new>", "Compare two saved JSON reports over time");
     item("help", "Show this overview");
 

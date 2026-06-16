@@ -45,6 +45,11 @@ pub fn defaults_read_app(app: &str, key: &str) -> Option<String> {
     run("defaults", &["read", "-app", app, key])
 }
 
+/// Read a single `sysctl` value (`sysctl -n <key>`).
+pub fn sysctl(key: &str) -> Option<String> {
+    run("sysctl", &["-n", key])
+}
+
 /// Whether the current process is running as root (euid 0).
 ///
 /// Cached: the euid can't change during a run, and several checks consult it.

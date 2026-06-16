@@ -45,8 +45,18 @@ sudo macabre --paranoia      # some checks need root for full coverage
 
 macabre tui                  # live full-screen dashboard (q quit, r rescan, p profile)
 macabre tui --paranoia       # dashboard starting in paranoia profile
+macabre sysinfo              # dump hardware & resources (specs + battery health)
+macabre sysinfo -f json      # same, machine-readable
 macabre diff old.json new.json   # compare two saved JSON reports over time
 ```
+
+## Hardware dump (`sysinfo`)
+
+`macabre sysinfo` prints the machine's real specs - model, chip, CPU cores
+(performance + efficiency), RAM, GPU, actual storage, serial, and **battery
+health** (condition, max capacity, cycle count). Handy for a quick check of a
+machine's resources, or to verify a used Mac matches what a seller claims.
+Add `-f json` for a machine-readable record.
 
 ## Live dashboard (`tui`)
 
