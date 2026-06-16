@@ -10,11 +10,13 @@
 //! launchd jobs, configuration profiles).
 
 mod checks;
+mod diff;
 mod model;
 mod report;
 mod sys;
+mod tui;
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use model::{Class, Profile, Report, Score, Status};
 use report::Format;
 use std::process::ExitCode;
@@ -59,6 +61,22 @@ struct Cli {
     /// Exit non-zero if any security check fails (useful in CI / monitoring).
     #[arg(long)]
     strict: bool,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Compare two saved JSON reports (`macabre -f json -o …`) over time.
+    Diff {
+        /// Earlier report.
+        old: String,
+        /// Later report.
+        new: String,
+    },
+    /// Live full-screen dashboard (re-runs the scan interactively).
+    Tui,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
@@ -73,13 +91,29 @@ enum OutFormat {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    let profile = if cli.paranoia { Profile::Paranoia } else { Profile::Baseline };
+
+    match &cli.command {
+        Some(Command::Diff { old, new }) => {
+            return ExitCode::from(diff::run(old, new, cli.verbose) as u8);
+        }
+        Some(Command::Tui) => {
+            return match tui::run(profile) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("tui error: {e}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        None => {}
+    }
 
     if cli.list {
         list_checks();
         return ExitCode::SUCCESS;
     }
 
-    let profile = if cli.paranoia { Profile::Paranoia } else { Profile::Baseline };
     let findings = checks::run(profile, &cli.only, &cli.skip);
 
     let security = Score::compute_for(&findings, Class::Security);

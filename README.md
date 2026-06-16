@@ -2,6 +2,8 @@
 
 A read-only **macOS hardening & security audit scanner**, written in Rust.
 
+<img src=".github/banner.png">
+
 `macabre` inspects local security settings, scores the host with a weighted
 *hardening index*, and reports findings to a colored terminal view (lynis-style)
 or exports them as JSON / Markdown / HTML. It **only reads** system state — it
@@ -29,7 +31,30 @@ macabre -f md  -o report.md  # Markdown to a file
 macabre -f html -o report.html
 macabre --strict             # exit non-zero if any *security* check FAILs (CI)
 sudo macabre --paranoia      # some checks need root for full coverage
+
+macabre tui                  # live full-screen dashboard (q quit, r rescan, p profile)
+macabre tui --paranoia       # dashboard starting in paranoia profile
+macabre diff old.json new.json   # compare two saved JSON reports over time
 ```
+
+## Live dashboard (`tui`)
+
+`macabre tui` opens a full-screen view with security/privacy gauges and a
+scrollable, category-grouped findings list that re-runs the scan automatically
+(toggle with `space`) or on demand. Keys: `q` quit · `r` rescan · `p` toggle
+profile · `space` auto-refresh · `↑↓`/`jk` scroll.
+
+## Diffing over time (`diff`)
+
+Save JSON snapshots (`macabre -f json -o report.json`) and compare them:
+
+```sh
+macabre diff yesterday.json today.json
+```
+
+It reports the score deltas and per-finding transitions — `REGRESSED`,
+`IMPROVED`, `NEW`, `REMOVED` (matched by stable check id) — and exits non-zero
+if anything regressed, so it can gate CI.
 
 ## Profiles
 
