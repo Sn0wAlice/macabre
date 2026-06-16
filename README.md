@@ -10,7 +10,18 @@ or exports them as JSON / Markdown / HTML. It **only reads** system state — it
 never changes anything. Failing checks include the exact command you'd run to
 fix them.
 
-## Build
+## Install
+
+### Homebrew (macOS, Apple Silicon & Intel)
+
+```sh
+brew tap sn0walice/macabre https://github.com/Sn0wAlice/macabre
+brew install macabre
+```
+
+(`macabre` is macOS-only; the formula declares `depends_on :macos`.)
+
+### From source
 
 ```sh
 cargo build --release
@@ -104,5 +115,3 @@ Spotlight) carry an explicit tradeoff note.
 
 - [ ] Per-check CIS benchmark references
 - [ ] Root-only checks: password policy, sudo timeout (currently SKIP without sudo)
-- [ ] Optional live TUI dashboard
-- [ ] Baseline diffing (compare two JSON reports over time)

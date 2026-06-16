@@ -3,7 +3,13 @@ name = "macabre"
 version = "0.1.0"
 edition = "2021"
 description = "macOS hardening & security audit scanner"
+authors = ["Sn0wAlice"]
 license = "MIT"
+repository = "https://github.com/Sn0wAlice/macabre"
+homepage = "https://github.com/Sn0wAlice/macabre"
+readme = "README.md"
+keywords = ["macos", "security", "hardening", "audit", "cli"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "macabre"
